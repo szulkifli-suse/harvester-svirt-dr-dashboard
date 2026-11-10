@@ -1,0 +1,62 @@
+# Rootless BuildKit job; build.sh fills in __IMAGE__, __VERSION__ and __PUSH__.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: harvester-dashboard-build
+  labels:
+    app.kubernetes.io/name: harvester-dashboard-build
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: harvester-dashboard-build
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: buildkit
+          image: moby/buildkit:v0.34.0-rootless
+          env:
+            - name: BUILDKITD_FLAGS
+              value: --oci-worker-no-process-sandbox
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              mkdir -p /tmp/ctx
+              tar -xzf /src/context.tgz -C /tmp/ctx
+              exec buildctl-daemonless.sh build \
+                --frontend dockerfile.v0 \
+                --local context=/tmp/ctx --local dockerfile=/tmp/ctx \
+                --opt build-arg:VERSION=__VERSION__ \
+                --output type=image,name=__IMAGE__,push=__PUSH__
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            # Rootless BuildKit creates user namespaces, which the default profiles forbid.
+            seccompProfile:
+              type: Unconfined
+            appArmorProfile:
+              type: Unconfined
+          resources:
+            requests: { cpu: 500m, memory: 512Mi }
+            limits: { memory: 2Gi }
+          volumeMounts:
+            - { name: context, mountPath: /src }
+            - { name: docker-config, mountPath: /home/user/.docker }
+            - { name: state, mountPath: /home/user/.local/share/buildkit }
+      volumes:
+        - name: context
+          configMap:
+            name: harvester-dashboard-build-context
+        - name: docker-config
+          secret:
+            secretName: registry-push
+            optional: true
+            items:
+              - key: .dockerconfigjson
+                path: config.json
+        - name: state
+          emptyDir: {}

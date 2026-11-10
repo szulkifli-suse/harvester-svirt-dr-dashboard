@@ -1,0 +1,97 @@
+{{- $name := include "hd.fullname" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hd.labels" . | nindent 4 }}
+spec:
+  # Jobs and login sessions live in memory, so run exactly one pod.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "hd.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hd.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ list (include (print $.Template.BasePath "/secret.yaml") .) (include (print $.Template.BasePath "/configmap.yaml") .) | toJson | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dashboard
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - { name: AWS_REGION, value: {{ .Values.config.awsRegion | quote }} }
+            - { name: EC2_INSTANCE_ID, value: {{ .Values.config.ec2InstanceId | quote }} }
+            - { name: EC2_TAGS, value: {{ .Values.config.ec2Tags | quote }} }
+            - { name: SSH_USER, value: {{ .Values.config.sshUser | quote }} }
+            - { name: SSH_KEY_PATH, value: /secrets/ssh/id }
+            - { name: HARVESTER_KUBECONFIG, value: /secrets/harvester/kubeconfig }
+            - { name: RECOVER_SCRIPT, value: /config/recover-harvester-vms.sh }
+            - name: DASHBOARD_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ $name }}, key: dashboard-password } }
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom: { secretKeyRef: { name: {{ $name }}, key: aws-access-key-id } }
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: {{ $name }}, key: aws-secret-access-key } }
+          ports:
+            - { name: http, containerPort: 8080 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: credentials, mountPath: /secrets, readOnly: true }
+            - { name: recover, mountPath: /config, readOnly: true }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: credentials
+          secret:
+            secretName: {{ $name }}
+            defaultMode: 0440
+            items:
+              - { key: ssh-private-key, path: ssh/id }
+              - { key: harvester-kubeconfig, path: harvester/kubeconfig }
+        - name: recover
+          configMap:
+            name: {{ $name }}-recover
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

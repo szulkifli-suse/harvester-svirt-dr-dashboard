@@ -1,0 +1,6 @@
+apiVersion: v2
+name: harvester-dashboard
+description: Monitor and power-manage the nested SUSE Virtualization (Harvester) lab on AWS
+type: application
+version: 0.1.1
+appVersion: "0.1.0"

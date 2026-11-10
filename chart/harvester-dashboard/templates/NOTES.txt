@@ -1,0 +1,8 @@
+{{- if .Values.ingress.enabled }}
+Dashboard: http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}/
+{{- else }}
+Dashboard: kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "hd.fullname" . }} 8088:{{ .Values.service.port }}
+{{- end }}
+
+Login password:
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "hd.fullname" . }} -o jsonpath='{.data.dashboard-password}' | base64 -d; echo

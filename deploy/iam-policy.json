@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadHostState",
+      "Effect": "Allow",
+      "Action": ["ec2:DescribeInstances", "cloudwatch:GetMetricStatistics"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PowerHarvesterHostOnly",
+      "Effect": "Allow",
+      "Action": ["ec2:StartInstances", "ec2:StopInstances"],
+      "Resource": "arn:aws:ec2:ap-southeast-1:162795121341:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Workload": "harvester",
+          "aws:ResourceTag/Managed_by": "terraform"
+        }
+      }
+    }
+  ]
+}

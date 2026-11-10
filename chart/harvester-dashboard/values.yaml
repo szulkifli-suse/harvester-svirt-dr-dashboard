@@ -1,0 +1,56 @@
+image:
+  repository: docker.io/darkwunan/harvester-dashboard
+  # Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+config:
+  awsRegion: ap-southeast-1
+  # Set to pin one instance; otherwise the instance is found by ec2Tags (exactly one must match).
+  ec2InstanceId: ""
+  ec2Tags: "Workload=harvester,Managed_by=terraform,Name=suse-virt-migration"
+  sshUser: opensuse
+
+# Required on first install. On upgrade, any value left empty keeps what is already in the cluster.
+secrets:
+  # Generated on first install when empty.
+  dashboardPassword: ""
+  awsAccessKeyId: ""
+  awsSecretAccessKey: ""
+  # --set-file secrets.sshPrivateKey=projects/aws/suse-virt-migration-ssh_private_key.pem
+  sshPrivateKey: ""
+  # --set-file secrets.harvesterKubeconfig=<kubeconfig for the Harvester cluster>
+  harvesterKubeconfig: ""
+
+# --set-file recoverScript=projects/aws/recover-harvester-vms.sh (same keep-on-upgrade rule)
+recoverScript: ""
+
+service:
+  port: 80
+
+ingress:
+  enabled: true
+  className: traefik
+  host: svirt.lepak-awan.com
+  annotations:
+    # HTTPS only: the page can power off the cluster.
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  tls:
+    enabled: true
+    # Empty uses the ingress controller's default certificate.
+    secretName: ""
+  # Traefik only: answer plain http:// with a permanent redirect to https://.
+  redirectHttp: true
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

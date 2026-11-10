@@ -1,0 +1,5 @@
+fastapi==0.146.0
+uvicorn==0.54.0
+boto3==1.43.114
+kubernetes==37.0.1
+paramiko==5.1.0

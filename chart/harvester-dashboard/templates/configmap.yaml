@@ -1,0 +1,14 @@
+{{- $name := printf "%s-recover" (include "hd.fullname" .) -}}
+{{- $existing := get ((lookup "v1" "ConfigMap" .Release.Namespace $name) | default dict) "data" | default dict -}}
+{{- $script := .Values.recoverScript | default (get $existing "recover-harvester-vms.sh") -}}
+{{- if not $script -}}
+{{- fail "recoverScript is required on first install (--set-file recoverScript=projects/aws/recover-harvester-vms.sh)" -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hd.labels" . | nindent 4 }}
+data:
+  recover-harvester-vms.sh: {{ $script | toJson }}
